@@ -21,23 +21,19 @@ import matplotlib.pyplot as plt
 
 def MinMaxScaler(data):
     ''' Min Max Normalization
-
     Parameters
     ----------
     data : numpy.ndarray
         input data to be normalized
         shape: [Batch size, dimension]
-
     Returns
     ----------
     data : numpy.ndarry
         normalized data
         shape: [Batch size, dimension]
-
     References
     ----------
     .. [1] http://sebastianraschka.com/Articles/2014_about_feature_scaling.html
-
     '''
     numerator = data - np.min(data, 0)
     denominator = np.max(data, 0) - np.min(data, 0)
@@ -51,14 +47,18 @@ data_dim = 5
 hidden_dim = 10
 output_dim = 1
 learning_rate = 0.01
-trainging_epoch = 3500
+#trainging_epoch = 3500
+trainging_epoch = 500
 stack_size = 3
+load_model = False
 
 # Open, High, Low, Volume, Close
-#xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
-env = DailyTradingEnv()
-xy = env.tic_que
-#xy = xy[::-1]  # reverse order (chronically ordered)
+#env = DailyTradingEnv()
+#xy = env.tic_que
+
+xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
+xy = xy[::-1]  # reverse order (chronically ordered)
+
 xy = MinMaxScaler(xy)
 x = xy
 y = xy[:, [-1]]  # Close as label
@@ -84,12 +84,14 @@ trainY, testY = np.array(dataY[0:train_size]), np.array(
 
 with tf.Session() as sess:
 
-    md = LstmModel(sess, "lstm", data_dim, hidden_dim, output_dim, seq_length, stack_size, learning_rate)
-    init = tf.global_variables_initializer()
-    sess.run(init)
+    md = LstmModel(sess, load_model,  "lstm", data_dim, hidden_dim, output_dim, seq_length, stack_size, learning_rate)
+
+    writer = tf.summary.FileWriter("./logs/lstm_logs_r0_01")
+    writer.add_graph(sess.graph)  # Show the graph
 
     # Training step
     for i in range(trainging_epoch):
+
         summary, _, step_loss = md.excute_train(trainX, trainY)
         writer.add_summary(summary, global_step=i)
         print("[step: {}] loss: {}".format(i, step_loss))
@@ -100,6 +102,9 @@ with tf.Session() as sess:
     # Accuracy step
     rmse_val = md.get_accuracy(test_predict, testY)
     print("RMSE: {}".format(rmse_val))
+
+    #Save model
+    md.save_model()
 
     # Plot predictions
     plt.plot(testY)
