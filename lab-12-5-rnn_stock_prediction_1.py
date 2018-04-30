@@ -49,14 +49,13 @@ data_dim = 5
 hidden_dim = 10
 output_dim = 1
 learning_rate = 0.01
-iterations = 3500
-stack_size = 3
+iterations = 3000
 
 # Open, High, Low, Volume, Close
-#xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
-env = DailyTradingEnv()
-xy = env.tic_que
-#xy = xy[::-1]  # reverse order (chronically ordered)
+xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
+#env = DailyTradingEnv()
+#xy = env.tic_que
+xy = xy[::-1]  # reverse order (chronically ordered)
 xy = MinMaxScaler(xy)
 x = xy
 y = xy[:, [-1]]  # Close as label
@@ -88,42 +87,31 @@ def lstm_cell():
     cell = rnn.BasicLSTMCell(hidden_dim, state_is_tuple=True)
     return cell
 
-cell = rnn.MultiRNNCell([lstm_cell() for _ in range(stack_size)], state_is_tuple=True)
+cell = rnn.MultiRNNCell([lstm_cell() for _ in range(2)], state_is_tuple=True)
 
 outputs, _states = tf.nn.dynamic_rnn(cell, X, dtype=tf.float32)
 Y_pred = tf.contrib.layers.fully_connected(
     outputs[:, -1], output_dim, activation_fn=None)  # We use the last cell's output
 
-with tf.name_scope("cost") as scope:
-    # cost/loss
-    loss = tf.reduce_sum(tf.square(Y_pred - Y))  # sum of the squares
-    cost_summ = tf.summary.scalar("cost", loss)
-
-with tf.name_scope("train") as scope:
-    # optimizer
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    train = optimizer.minimize(loss)
+# cost/loss
+loss = tf.reduce_sum(tf.square(Y_pred - Y))  # sum of the squares
+# optimizer
+optimizer = tf.train.AdamOptimizer(learning_rate)
+train = optimizer.minimize(loss)
 
 # RMSE
 targets = tf.placeholder(tf.float32, [None, 1])
 predictions = tf.placeholder(tf.float32, [None, 1])
 rmse = tf.sqrt(tf.reduce_mean(tf.square(targets - predictions)))
-#accuracy_summ = tf.summary.scalar("accuracy", rmse)
 
 with tf.Session() as sess:
-
-    # tensorboard --logdir=./logs/xor_logs
-    merged_summary = tf.summary.merge_all()
-    writer = tf.summary.FileWriter("./logs/lstm_logs_r0_01")
-    writer.add_graph(sess.graph)  # Show the graph
-
     init = tf.global_variables_initializer()
     sess.run(init)
 
     # Training step
     for i in range(iterations):
-        summary, _, step_loss = sess.run([merged_summary, train, loss], feed_dict={X: trainX, Y: trainY})
-        writer.add_summary(summary, global_step=i)
+        _, step_loss = sess.run([train, loss], feed_dict={
+                                X: trainX, Y: trainY})
         print("[step: {}] loss: {}".format(i, step_loss))
 
     # Test step
