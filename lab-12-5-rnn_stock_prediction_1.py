@@ -2,11 +2,13 @@
 This script shows how to predict stock prices using a basic RNN
 '''
 import tensorflow as tf
-from tensorflow.contrib import rnn
+
 import numpy as np
 import matplotlib
 import os
 from env import *
+from model.model import *
+
 
 tf.set_random_seed(777)  # reproducibility
 
@@ -49,7 +51,8 @@ data_dim = 5
 hidden_dim = 10
 output_dim = 1
 learning_rate = 0.01
-iterations = 3000
+trainging_epoch = 3500
+stack_size = 3
 
 # Open, High, Low, Volume, Close
 #xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
@@ -78,46 +81,24 @@ trainX, testX = np.array(dataX[0:train_size]), np.array(
 trainY, testY = np.array(dataY[0:train_size]), np.array(
     dataY[train_size:len(dataY)])
 
-# input place holders
-X = tf.placeholder(tf.float32, [None, seq_length, data_dim])
-Y = tf.placeholder(tf.float32, [None, 1])
-
-# Make a lstm cell with hidden_size (each unit output vector size)
-def lstm_cell():
-    cell = rnn.BasicLSTMCell(hidden_dim, state_is_tuple=True)
-    return cell
-
-cell = rnn.MultiRNNCell([lstm_cell() for _ in range(2)], state_is_tuple=True)
-
-outputs, _states = tf.nn.dynamic_rnn(cell, X, dtype=tf.float32)
-Y_pred = tf.contrib.layers.fully_connected(
-    outputs[:, -1], output_dim, activation_fn=None)  # We use the last cell's output
-
-# cost/loss
-loss = tf.reduce_sum(tf.square(Y_pred - Y))  # sum of the squares
-# optimizer
-optimizer = tf.train.AdamOptimizer(learning_rate)
-train = optimizer.minimize(loss)
-
-# RMSE
-targets = tf.placeholder(tf.float32, [None, 1])
-predictions = tf.placeholder(tf.float32, [None, 1])
-rmse = tf.sqrt(tf.reduce_mean(tf.square(targets - predictions)))
 
 with tf.Session() as sess:
+
+    md = LstmModel(sess, "lstm", data_dim, hidden_dim, output_dim, seq_length, stack_size, learning_rate)
     init = tf.global_variables_initializer()
     sess.run(init)
 
     # Training step
-    for i in range(iterations):
-        _, step_loss = sess.run([train, loss], feed_dict={
-                                X: trainX, Y: trainY})
+    for i in range(trainging_epoch):
+        summary, _, step_loss = md.excute_train(trainX, trainY)
+        writer.add_summary(summary, global_step=i)
         print("[step: {}] loss: {}".format(i, step_loss))
 
     # Test step
-    test_predict = sess.run(Y_pred, feed_dict={X: testX})
-    rmse_val = sess.run(rmse, feed_dict={
-                    targets: testY, predictions: test_predict})
+    test_predict = md.model_predict(testX)
+
+    # Accuracy step
+    rmse_val = md.get_accuracy(test_predict, testY)
     print("RMSE: {}".format(rmse_val))
 
     # Plot predictions
