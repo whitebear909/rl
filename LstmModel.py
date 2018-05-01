@@ -8,8 +8,8 @@ class LstmModelF():
         self.name = name
 
         # lstm cell memory
-        #self.cell_units = 128
-        self.cell_units = 12
+        # self.cell_units = 128
+        self.cell_units = 5
         self.n_seq = n_seq
 
         self.n_in = n_in
@@ -25,6 +25,7 @@ class LstmModelF():
         self._ylist = None
         self._keep_prob = None
         self._sess = None
+
         self._history = {
             'rmse': [],
             'accuracy': [],
@@ -45,6 +46,7 @@ class LstmModelF():
         y = tf.contrib.layers.fully_connected(
             outputs[:, -1], self.n_out, activation_fn=None)  # We use the last cell's output
 
+        self._saver = tf.train.Saver()
         return y
 
     def loss(self, y, t):
@@ -64,15 +66,15 @@ class LstmModelF():
     def accuracy(self, y, t):
         accuracy = tf.sqrt(tf.reduce_mean(tf.square(y - t)))
         return accuracy
-        #rmse = tf.sqrt(tf.reduce_mean(tf.square(self.y - self.t)))
-        #accuracy = self._sess.run(self.rmse, feed_dict={self._targets: y, self._predictions: t})
+        # rmse = tf.sqrt(tf.reduce_mean(tf.square(self.y - self.t)))
+        # accuracy = self._sess.run(self.rmse, feed_dict={self._targets: y, self._predictions: t})
         # self.accuracy_summ = tf.summary.scalar("accuracy", self.rmse)
 
         # with tf.name_scope("tensorboard") as scope:
         # tensorboard --logdir=./logs/lstm_logs_r0_01
 
     def evaluate(self, X_test, Y_test):
-        self.result_y = self._y.eval(session=self._sess,feed_dict={
+        self.result_y = self._y.eval(session=self._sess, feed_dict={
             self._x: X_test
         })
 
@@ -83,7 +85,6 @@ class LstmModelF():
             # RNN is not need keep_prob
             # , self._keep_prob: 1.0
         })
-    
 
     def fit(self, X_train, Y_train,
             epochs=100, batch_size=100, p_keep=0.5,
@@ -144,6 +145,9 @@ class LstmModelF():
                 # , keep_prob: 1.0
             })
 
+            if epoch % 100 :
+                self.save_model()
+
             # record values
             self._history['loss'].append(loss_)
             self._history['accuracy'].append(accuracy_)
@@ -151,15 +155,18 @@ class LstmModelF():
             if verbose:
                 print('epoch:', epoch,
                       ' loss:', loss_,
-                      ' accuracy:', accuracy_)
+                      ' rmse:', accuracy_)
 
         return self._history
 
     def save_model(self):
-        self.save_path = self.saver.save(self.sess, "./lstm.ckpt")
 
-    def load_model(self):
-        # ckpt = tf.train.get_checkpoint_state(self.name)
-        # self.saver.restore(self.sess, ckpt.model_checkpoint_path)
-        # new_saver = tf.train.import_meta_graph("./lstm.ckpt.meta")
-        self.saver.restore(self.sess, "./lstm.ckpt")
+        self.save_path = self._saver.save(self._sess, "./savemodel/lstm.ckpt")
+
+#    def load_model(self):
+
+
+# ckpt = tf.train.get_checkpoint_state(self.name)
+# self.saver.restore(self.sess, ckpt.model_checkpoint_path)
+# new_saver = tf.train.import_meta_graph("./lstm.ckpt.meta")
+#self.saver.restore(self.sess, "./lstm.ckpt")
