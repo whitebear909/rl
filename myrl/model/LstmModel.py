@@ -4,21 +4,22 @@ import tensorflow as tf
 
 class LstmModelF():
 
-    def __init__(self, name, n_in, n_out, n_seq, n_hiddens, learning_rate):
+    def __init__(self, name, n_in, n_out, n_seq, n_layers, cell_units, learning_rate):
         self.name = name
 
         # lstm cell memory
         # self.cell_units = 128
-        self.cell_units = 5
+        self.cell_units = cell_units
         self.n_seq = n_seq
 
         self.n_in = n_in
-        self.n_hiddens = n_hiddens
+        self.number_of_layers = n_layers
         self.n_out = n_out
         self.weights = []
         self.biases = []
 
         self.learning_rate = learning_rate
+        self.forget_bias = 1.0  # 망각편향(기본값 1.0)
 
         self._x = None
         self._t = None
@@ -33,18 +34,31 @@ class LstmModelF():
         }
 
     def inference(self, x, keep_prob):
-
         # Make a lstm cell with hidden_size (each unit output vector size)
         def lstm_cell():
-            cell = rnn.BasicLSTMCell(self.cell_units, state_is_tuple=True)
+            # LSTM셀을 생성
+            # num_units: 각 Cell 출력 크기
+            # forget_bias:  to the biases of the forget gate
+            #              (default: 1)  in order to reduce the scale of forgetting in the beginning of the training.
+            # state_is_tuple: True ==> accepted and returned states are 2-tuples of the c_state and m_state.
+            # state_is_tuple: False ==> they are concatenated along the column axis.
+            cell = rnn.BasicLSTMCell(num_units=self.cell_units,
+                                     forget_bias=self.forget_bias, state_is_tuple=True, activation=tf.nn.softsign)
+            if keep_prob < 1.0:
+                cell = rnn.DropoutWrapper(cell, output_keep_prob=self._keep_prob)
+
             return cell
 
-        cell = rnn.MultiRNNCell([lstm_cell() for _, _ in enumerate(self.n_hiddens)], state_is_tuple=True)
+        #cell = rnn.MultiRNNCell([lstm_cell() for _, _ in enumerate(self.n_hiddens)], state_is_tuple=True)
+        stacked_cell = rnn.MultiRNNCell(
+            [lstm_cell() for _ in range(self.number_of_layers)], state_is_tuple=True)
 
-        outputs, _states = tf.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+        outputs, _states = tf.nn.dynamic_rnn(stacked_cell, x, dtype=tf.float32)
 
+        # [:, -1]를 잘 살펴보자. LSTM RNN의 마지막 (hidden)출력만을 사용했다.
+        # 과거 여러 거래일의 주가를 이용해서 다음날의 주가 1개를 예측하기때문에 MANY-TO-ONE형태이다
         y = tf.contrib.layers.fully_connected(
-            outputs[:, -1], self.n_out, activation_fn=None)  # We use the last cell's output
+            outputs[:, -1], self.n_out, activation_fn=tf.identity)  # We use the last cell's output
 
         self._saver = tf.train.Saver()
         return y
@@ -74,9 +88,18 @@ class LstmModelF():
         # tensorboard --logdir=./logs/lstm_logs_r0_01
 
     def evaluate(self, X_test, Y_test):
-        self.result_y = self._y.eval(session=self._sess, feed_dict={
-            self._x: X_test
-        })
+        test_data_feed = {
+            self.learning_rate: 0.0,
+            self.keep_prob: 1.0,
+            self._x: X_test,
+            self._t: Y_test
+        }
+
+        #self.result_y = self._y.eval(session=self._sess, feed_dict={
+        #    self._x: X_test
+        #})
+
+        self.result_y = self._y.eval(session=self._sess, feed_dict = test_data_feed)
 
         accuracy = self.accuracy(self._y, self._t)
         return accuracy.eval(session=self._sess, feed_dict={
@@ -91,7 +114,9 @@ class LstmModelF():
             verbose=1):
         x = tf.placeholder(tf.float32, [None, self.n_seq, self.n_in])
         t = tf.placeholder(tf.float32, [None, self.n_out])
-        keep_prob = tf.placeholder(tf.float32)
+        keep_prob = tf.placeholder(tf.float32, None, name="keep_prob")
+
+        #self.learning_rate = tf.placeholder(tf.float32, None, name="learning_rate")
 
         # evaluate()
         self._x = x
@@ -113,6 +138,8 @@ class LstmModelF():
 
         N_train = len(X_train)
         n_batches = N_train // batch_size
+
+        #initial_state = state = stacked_lstm.zero_state(batch_size, tf.float32)
 
         for epoch in range(epochs):
             # X_, Y_ = suffle(X_train, Y_train)

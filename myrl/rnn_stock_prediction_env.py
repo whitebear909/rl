@@ -43,8 +43,10 @@ def MinMaxScaler(data):
 if __name__ == '__main__':
     # train Parameters
     seq_length = 10
+    #n_layers = [100, 100]
+    n_layers = 2
+    cell_units = 12
     learning_rate = 0.01
-    n_hiddens = [100, 100]
     nb_epoch = 600
     batch_size = 500
     p_keep = 0.5
@@ -91,7 +93,8 @@ if __name__ == '__main__':
     모델을 설정한다
     #lstm 3 stack, other 3stack, 100 w
     '''
-    model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length, n_hiddens, learning_rate)
+    model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length,
+                       n_layers, cell_units, learning_rate)
 
     '''    
     모델을 학습시킨다
