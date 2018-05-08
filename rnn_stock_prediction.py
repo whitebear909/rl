@@ -84,7 +84,7 @@ trainY, testY = np.array(dataY[0:train_size]), np.array(
 
 with tf.Session() as sess:
 
-    model = LstmModel(sess, load_model,  "lstm", data_dim, hidden_dim, output_dim, seq_length, stack_size, learning_rate)
+    md = LstmModel(sess, load_model,  "lstm", data_dim, hidden_dim, output_dim, seq_length, stack_size, learning_rate)
 
     writer = tf.summary.FileWriter("./logs/lstm_logs_r0_01")
     writer.add_graph(sess.graph)  # Show the graph
@@ -92,19 +92,19 @@ with tf.Session() as sess:
     # Training step
     for i in range(trainging_epoch):
 
-        summary, _, step_loss = model.excute_train(trainX, trainY)
+        summary, _, step_loss = md.excute_train(trainX, trainY)
         writer.add_summary(summary, global_step=i)
         print("[step: {}] loss: {}".format(i, step_loss))
 
     # Test step
-    test_predict = model.model_predict(testX)
+    test_predict = md.model_predict(testX)
 
     # Accuracy step
-    rmse_val = model.get_accuracy(test_predict, testY)
+    rmse_val = md.get_accuracy(test_predict, testY)
     print("RMSE: {}".format(rmse_val))
 
     #Save model
-    model.save_model()
+    md.save_model()
 
     # Plot predictions
     plt.plot(testY)

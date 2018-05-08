@@ -55,10 +55,10 @@ trainging_epoch = 3500
 stack_size = 3
 
 # Open, High, Low, Volume, Close
-#xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
-env = DailyTradingEnv()
-xy = env.tic_que
-#xy = xy[::-1]  # reverse order (chronically ordered)
+xy = np.loadtxt('data-02-stock_daily.csv', delimiter=',')
+#env = DailyTradingEnv()
+#xy = env.tic_que
+xy = xy[::-1]  # reverse order (chronically ordered)
 xy = MinMaxScaler(xy)
 x = xy
 y = xy[:, [-1]]  # Close as label

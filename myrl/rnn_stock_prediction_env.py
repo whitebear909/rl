@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib
 import os
 from env import *
-from model.model_upgrade import *
+from model.LstmModel import *
 
 
 tf.set_random_seed(777)  # reproducibility
@@ -40,26 +40,25 @@ def MinMaxScaler(data):
     # noise term prevents the zero division
     return numerator / (denominator + 1e-7)
 
-
-
-
 if __name__ == '__main__':
     # train Parameters
     seq_length = 10
+    #n_layers = [100, 100]
+    n_layers = 2
+    cell_units = 12
     learning_rate = 0.01
-    n_hiddens = [100, 100, 100]
-    nb_epoch = 500
-    batch_size = 200
+    nb_epoch = 600
+    batch_size = 500
     p_keep = 0.5
-
+    n_training_stock = 200
 
 
     '''
     데이터를 생성한다
     '''
     # Open, High, Low, Volume, Close
-    # env = DailyTradingEnv()
-    # xy = env.tic_que
+    #env = DailyTradingEnv()
+    #xy = env.tic_que
 
     xy = np.loadtxt('./data-02-stock_daily.csv', delimiter=',')
     xy = xy[::-1]  # reverse order (chronically ordered)
@@ -94,7 +93,8 @@ if __name__ == '__main__':
     모델을 설정한다
     #lstm 3 stack, other 3stack, 100 w
     '''
-    model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length, n_hiddens, learning_rate)
+    model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length,
+                       n_layers, cell_units, learning_rate)
 
     '''    
     모델을 학습시킨다
@@ -110,4 +110,20 @@ if __name__ == '__main__':
     accuracy = model.evaluate(testX, testY)
     print('accuracy: ', accuracy)
 
+    # Plot predictions
+    plt.plot(testY)
+    plt.plot(model.result_y)
+    plt.xlabel("Time Period")
+    plt.ylabel("Stock Price")
+    plt.show()
 
+    fig = plt.figure()
+    ax_acc = fig.add_subplot(111) #axis accuracy
+    ax_acc.plot(range(nb_epoch),model._history['accuracy'], label='rmse', color='black')
+
+    ax_acc = ax_acc.twinx()  # axis loss
+    ax_acc.plot(range(nb_epoch), model._history['loss'], label='loss', color='red')
+
+    plt.xlabel("epoch")
+    plt.show()
+    #plt.savefig('./plt/lstm.eps')

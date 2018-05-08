@@ -41,14 +41,9 @@ def MinMaxScaler(data):
     return numerator / (denominator + 1e-7)
 
 if __name__ == '__main__':
+
     # train Parameters
     seq_length = 10
-    learning_rate = 0.01
-    n_hiddens = [100, 100]
-    nb_epoch = 600
-    batch_size = 500
-    p_keep = 0.5
-    n_training_stock = 200
 
 
     '''
@@ -84,28 +79,35 @@ if __name__ == '__main__':
         dataY[train_size:len(dataY)])
 
 
-    #print (len(trainX[0][0]))
-    #print(len(trainX[0]),len(trainX[1]),len(trainX[2]),len(trainX[0][-1]))
+    n_layers = 3
+    cell_units = 128
+    nb_epoch = 500
+    batch_size = 1
+    p_keep = 1.0
+    p_learning_rate = 0.001
+    n_training_stock = 200
 
     '''
     모델을 설정한다
     #lstm 3 stack, other 3stack, 100 w
     '''
-    model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length, n_hiddens, learning_rate)
+    model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length,
+                       n_layers, cell_units)
 
     '''    
     모델을 학습시킨다
     '''
     model.fit(trainX, trainY,
               nb_epoch,
-              batch_size,
-              p_keep)
+              train_size,
+              p_keep,
+              p_learning_rate)
 
     '''
     예측 정확도를 평가한다
     '''
-    accuracy = model.evaluate(testX, testY)
-    print('accuracy: ', accuracy)
+    accuracy = model.evaluate(testX, testY, test_size)
+    #print('accuracy: ', accuracy)
 
     # Plot predictions
     plt.plot(testY)
