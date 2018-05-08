@@ -46,10 +46,10 @@ if __name__ == '__main__':
     #n_layers = [100, 100]
     n_layers = 2
     cell_units = 12
-    learning_rate = 0.01
-    nb_epoch = 600
+    nb_epoch = 100
     batch_size = 500
-    p_keep = 0.5
+    p_keep = 1.0
+    p_learning_rate = 0.01
     n_training_stock = 200
 
 
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     #lstm 3 stack, other 3stack, 100 w
     '''
     model = LstmModelF("lstm", len(trainX[0][0]), len(trainY[0]), seq_length,
-                       n_layers, cell_units, learning_rate)
+                       n_layers, cell_units)
 
     '''    
     모델을 학습시킨다
@@ -102,7 +102,8 @@ if __name__ == '__main__':
     model.fit(trainX, trainY,
               nb_epoch,
               batch_size,
-              p_keep)
+              p_keep,
+              p_learning_rate)
 
     '''
     예측 정확도를 평가한다

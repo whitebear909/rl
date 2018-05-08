@@ -4,7 +4,7 @@ import tensorflow as tf
 
 class LstmModelF():
 
-    def __init__(self, name, n_in, n_out, n_seq, n_layers, cell_units, learning_rate):
+    def __init__(self, name, n_in, n_out, n_seq, n_layers, cell_units):
         self.name = name
 
         # lstm cell memory
@@ -18,12 +18,13 @@ class LstmModelF():
         self.weights = []
         self.biases = []
 
-        self.learning_rate = learning_rate
+        #self.learning_rate = learning_rate
         self.forget_bias = 1.0  # 망각편향(기본값 1.0)
 
         self._x = None
         self._t = None
         self._ylist = None
+        self._learning_rate = None
         self._keep_prob = None
         self._sess = None
 
@@ -33,7 +34,7 @@ class LstmModelF():
             'loss': []
         }
 
-    def inference(self, x, keep_prob):
+    def inference(self, x):
         # Make a lstm cell with hidden_size (each unit output vector size)
         def lstm_cell():
             # LSTM셀을 생성
@@ -44,7 +45,7 @@ class LstmModelF():
             # state_is_tuple: False ==> they are concatenated along the column axis.
             cell = rnn.BasicLSTMCell(num_units=self.cell_units,
                                      forget_bias=self.forget_bias, state_is_tuple=True, activation=tf.nn.softsign)
-            if keep_prob < 1.0:
+            if self._keep_prob < 1.0:
                 cell = rnn.DropoutWrapper(cell, output_keep_prob=self._keep_prob)
 
             return cell
@@ -72,7 +73,7 @@ class LstmModelF():
 
     def trainging(self, loss):
 
-        optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        optimizer = tf.train.AdamOptimizer(self._learning_rate)
         train_step = optimizer.minimize(loss)
 
         return train_step
@@ -88,9 +89,15 @@ class LstmModelF():
         # tensorboard --logdir=./logs/lstm_logs_r0_01
 
     def evaluate(self, X_test, Y_test):
+        learning_rate = tf.placeholder(tf.float32, None, name="learning_rate")
+        keep_prob = tf.placeholder(tf.float32, None, name="keep_prob")
+
+        learning_rate = 0.0
+        keep_prob = 1.0
+        self._learning_rate = learning_rate
+        self._keep_prob = keep_prob
+
         test_data_feed = {
-            self.learning_rate: 0.0,
-            self.keep_prob: 1.0,
             self._x: X_test,
             self._t: Y_test
         }
@@ -102,28 +109,26 @@ class LstmModelF():
         self.result_y = self._y.eval(session=self._sess, feed_dict = test_data_feed)
 
         accuracy = self.accuracy(self._y, self._t)
-        return accuracy.eval(session=self._sess, feed_dict={
-            self._x: X_test,
-            self._t: Y_test
-            # RNN is not need keep_prob
-            # , self._keep_prob: 1.0
-        })
+        return accuracy.eval(session=self._sess, feed_dict=test_data_feed)
 
     def fit(self, X_train, Y_train,
-            epochs=100, batch_size=100, p_keep=0.5,
+            epochs=100, batch_size=100, p_keep=0.5, p_learning_rate=0.01,
             verbose=1):
         x = tf.placeholder(tf.float32, [None, self.n_seq, self.n_in])
         t = tf.placeholder(tf.float32, [None, self.n_out])
         keep_prob = tf.placeholder(tf.float32, None, name="keep_prob")
+        learning_rate = tf.placeholder(tf.float32, None, name="learning_rate")
 
-        #self.learning_rate = tf.placeholder(tf.float32, None, name="learning_rate")
+        keep_prob = p_keep
+        learning_rate = p_learning_rate
 
         # evaluate()
         self._x = x
         self._t = t
         self._keep_prob = keep_prob
+        self._learning_rate = learning_rate
 
-        y = self.inference(x, keep_prob)
+        y = self.inference(x)
         loss = self.loss(y, t)
         train_step = self.trainging(loss)
         accuracy = self.accuracy(y, t)
