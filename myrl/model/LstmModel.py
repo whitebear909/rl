@@ -1,5 +1,6 @@
 from tensorflow.contrib import rnn
 import tensorflow as tf
+import numpy as np
 
 
 class LstmModelF():
@@ -17,8 +18,8 @@ class LstmModelF():
         self.n_out = n_out
         self.weights = []
         self.biases = []
-
-        #self.learning_rate = learning_rate
+        self.result_y = []
+        # self.learning_rate = learning_rate
         self.forget_bias = 1.0  # 망각편향(기본값 1.0)
 
         self._x = None
@@ -26,7 +27,9 @@ class LstmModelF():
         self._ylist = None
         self._learning_rate = None
         self._keep_prob = None
+        self._batch_size = None
         self._sess = None
+        self._state = None
 
         self._history = {
             'rmse': [],
@@ -34,7 +37,7 @@ class LstmModelF():
             'loss': []
         }
 
-    def inference(self, x):
+    def inference(self, x, batch_size, keep_prob):
         # Make a lstm cell with hidden_size (each unit output vector size)
         def lstm_cell():
             # LSTM셀을 생성
@@ -45,17 +48,22 @@ class LstmModelF():
             # state_is_tuple: False ==> they are concatenated along the column axis.
             cell = rnn.BasicLSTMCell(num_units=self.cell_units,
                                      forget_bias=self.forget_bias, state_is_tuple=True, activation=tf.nn.softsign)
-            if self._keep_prob < 1.0:
-                cell = rnn.DropoutWrapper(cell, output_keep_prob=self._keep_prob)
+            if self.keep_prob < 1.0:
+                cell = rnn.DropoutWrapper(cell, output_keep_prob=keep_prob)
 
             return cell
 
-        #cell = rnn.MultiRNNCell([lstm_cell() for _, _ in enumerate(self.n_hiddens)], state_is_tuple=True)
+        # cell = rnn.MultiRNNCell([lstm_cell() for _, _ in enumerate(self.n_hiddens)], state_is_tuple=True)
         stacked_cell = rnn.MultiRNNCell(
             [lstm_cell() for _ in range(self.number_of_layers)], state_is_tuple=True)
 
-        outputs, _states = tf.nn.dynamic_rnn(stacked_cell, x, dtype=tf.float32)
+        # print(tf.shape(x))
+        # print(tf.shape(x)[0])
+        self._cell = stacked_cell
+        self._initial_state = stacked_cell.zero_state(batch_size, tf.float32)
 
+        outputs, _states = tf.nn.dynamic_rnn(stacked_cell, x, dtype=tf.float32, initial_state=self._initial_state)
+        self._state = _states
         # [:, -1]를 잘 살펴보자. LSTM RNN의 마지막 (hidden)출력만을 사용했다.
         # 과거 여러 거래일의 주가를 이용해서 다음날의 주가 1개를 예측하기때문에 MANY-TO-ONE형태이다
         y = tf.contrib.layers.fully_connected(
@@ -71,9 +79,9 @@ class LstmModelF():
 
         return cross_entropy
 
-    def trainging(self, loss):
+    def trainging(self, loss, learning_rate):
 
-        optimizer = tf.train.AdamOptimizer(self._learning_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate)
         train_step = optimizer.minimize(loss)
 
         return train_step
@@ -88,49 +96,45 @@ class LstmModelF():
         # with tf.name_scope("tensorboard") as scope:
         # tensorboard --logdir=./logs/lstm_logs_r0_01
 
-    def evaluate(self, X_test, Y_test):
-        learning_rate = tf.placeholder(tf.float32, None, name="learning_rate")
-        keep_prob = tf.placeholder(tf.float32, None, name="keep_prob")
+    def evaluate(self, X_test, Y_test, p_batch_size):
 
-        learning_rate = 0.0
-        keep_prob = 1.0
-        self._learning_rate = learning_rate
-        self._keep_prob = keep_prob
+        self.keep_prob = 1.0
+        state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
 
         test_data_feed = {
             self._x: X_test,
-            self._t: Y_test
+            self._t: Y_test,
+            self._batch_size: p_batch_size,
+            self._learning_rate: 0.0,
+            self._keep_prob: 1.0,
+            self._initial_state: state
         }
 
-        #self.result_y = self._y.eval(session=self._sess, feed_dict={
-        #    self._x: X_test
-        #})
-
-        self.result_y = self._y.eval(session=self._sess, feed_dict = test_data_feed)
-
+        self.result_y = self._y.eval(session=self._sess, feed_dict=test_data_feed)
         accuracy = self.accuracy(self._y, self._t)
         return accuracy.eval(session=self._sess, feed_dict=test_data_feed)
 
     def fit(self, X_train, Y_train,
-            epochs=100, batch_size=100, p_keep=0.5, p_learning_rate=0.01,
+            epochs=100, p_batch_size=100, p_keep=0.5, p_learning_rate=0.01,
             verbose=1):
         x = tf.placeholder(tf.float32, [None, self.n_seq, self.n_in])
         t = tf.placeholder(tf.float32, [None, self.n_out])
         keep_prob = tf.placeholder(tf.float32, None, name="keep_prob")
         learning_rate = tf.placeholder(tf.float32, None, name="learning_rate")
-
-        keep_prob = p_keep
-        learning_rate = p_learning_rate
+        batch_size = tf.placeholder(tf.int32, [], name="batch_size")
 
         # evaluate()
         self._x = x
         self._t = t
-        self._keep_prob = keep_prob
+        self._batch_size = batch_size
         self._learning_rate = learning_rate
+        self._keep_prob = keep_prob
 
-        y = self.inference(x)
+        self.keep_prob = p_keep
+
+        y = self.inference(x, batch_size, keep_prob)
         loss = self.loss(y, t)
-        train_step = self.trainging(loss)
+        train_step = self.trainging(loss, learning_rate)
         accuracy = self.accuracy(y, t)
 
         init = tf.global_variables_initializer()
@@ -141,43 +145,27 @@ class LstmModelF():
         self._y = y
         self._sess = sess
 
-        N_train = len(X_train)
-        n_batches = N_train // batch_size
+        # initial_state = state = stacked_lstm.zero_state(batch_size, tf.float32)
+        state = sess.run(self._cell.zero_state(p_batch_size, tf.float32))
 
-        #initial_state = state = stacked_lstm.zero_state(batch_size, tf.float32)
+        train_data_feed = {
+            x: X_train,
+            t: Y_train,
+            batch_size: p_batch_size,
+            learning_rate: p_learning_rate,
+            keep_prob: p_keep,
+            self._initial_state: state
+        }
 
         for epoch in range(epochs):
-            # X_, Y_ = suffle(X_train, Y_train)
-            # RNN is not need suffle
-            X_ = X_train
-            Y_ = Y_train
+            #initial_state = state = stacked_lstm.zero_state(batch_size, tf.float32)
+            sess.run(train_step, feed_dict=train_data_feed)
 
-            for i in range(n_batches):
-                start = i * batch_size
-                end = start + batch_size
+            loss_ = loss.eval(session=sess, feed_dict=train_data_feed)
 
-                sess.run(train_step, feed_dict={
-                    x: X_[start:end],
-                    t: Y_[start:end]
-                    # RNN is not need keep_prob
-                    # , keep_prob: p_keep
-                })
+            accuracy_ = accuracy.eval(session=sess, feed_dict=train_data_feed)
 
-            loss_ = loss.eval(session=sess, feed_dict={
-                x: X_train,
-                t: Y_train
-                # RNN is not need keep_prob
-                # , keep_prob: 1.0
-            })
-
-            accuracy_ = accuracy.eval(session=sess, feed_dict={
-                x: X_train,
-                t: Y_train
-                # RNN is not need keep_prob
-                # , keep_prob: 1.0
-            })
-
-            if epoch % 100 :
+            if epoch % 100:
                 self.save_model()
 
             # record values
@@ -201,4 +189,4 @@ class LstmModelF():
 # ckpt = tf.train.get_checkpoint_state(self.name)
 # self.saver.restore(self.sess, ckpt.model_checkpoint_path)
 # new_saver = tf.train.import_meta_graph("./lstm.ckpt.meta")
-#self.saver.restore(self.sess, "./lstm.ckpt")
+# self.saver.restore(self.sess, "./lstm.ckpt")
