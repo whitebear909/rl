@@ -114,6 +114,27 @@ class LstmModelF():
         accuracy = self.accuracy(self._y, self._t)
         return accuracy.eval(session=self._sess, feed_dict=test_data_feed)
 
+    def run_evaluate(self, X_test):
+
+        p_batch_size = 1
+        self.keep_prob = 1.0
+        state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
+
+        test_data_feed = {
+            self._x: X_test,
+            self._t: Y_test,
+            self._batch_size: p_batch_size,
+            self._learning_rate: 0.0,
+            self._keep_prob: 1.0,
+            self._initial_state: state
+        }
+
+        self.result_y = self._y.eval(session=self._sess, feed_dict=test_data_feed)
+
+        return self.result_y
+
+
+
     def fit(self, X_train, Y_train,
             epochs=100, p_batch_size=100, p_keep=0.5, p_learning_rate=0.01,
             verbose=1):
