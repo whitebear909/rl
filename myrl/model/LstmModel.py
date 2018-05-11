@@ -9,7 +9,6 @@ class LstmModelF():
         self.name = name
 
         # lstm cell memory
-        # self.cell_units = 128
         self.cell_units = cell_units
         self.n_seq = n_seq
 
@@ -19,7 +18,6 @@ class LstmModelF():
         self.weights = []
         self.biases = []
         self.result_y = []
-        # self.learning_rate = learning_rate
         self.forget_bias = 1.0  # 망각편향(기본값 1.0)
 
         self._x = None
@@ -122,7 +120,6 @@ class LstmModelF():
 
         test_data_feed = {
             self._x: X_test,
-            self._t: Y_test,
             self._batch_size: p_batch_size,
             self._learning_rate: 0.0,
             self._keep_prob: 1.0,
@@ -193,7 +190,7 @@ class LstmModelF():
             self._history['loss'].append(loss_)
             self._history['accuracy'].append(accuracy_)
 
-            if verbose:
+            if verbose and not (epoch % 50) :
                 print('epoch:', epoch,
                       ' loss:', loss_,
                       ' rmse:', accuracy_)

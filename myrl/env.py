@@ -4,125 +4,37 @@ from sqlalchemy import create_engine
 import numpy as np
 from io import BytesIO
 import pymysql
-import gym
-from gym import spaces
 from collections import deque
 
-CODE_MARK_MAP = {0: ' ', 1: 'O', 2: 'X'}
-NUM_LOC = 9
+class DailyTradingEnv():
 
-CONTROL_STOCK = 3
-# 0 hold, 1 ~ NUM_STOCK buy, NUM_STOCK+1 ~ NUM_STOCK*2 sell
-NUM_ACTION = CONTROL_STOCK * 2 + 1
-NUM_STATE_INFO = 11
+    def __init__(self, seq_length, test_date_rate, data_type, file_path):
+        self._seq_length = seq_length
+        self._test_date_rate = test_date_rate
+        self._data_type = data_type
+        self._file_path = file_path
 
-START_AMT = 10000000
-END_TIME = '145500'
-#tic 20180402153030
-
-O_REWARD = 1
-X_REWARD = -1
-NO_REWARD = -0.001
-
-LEFT_PAD = ' '
-LOG_FMT = logging.Formatter('%(levelname)s '
-'[%(filename)s:%(lineno)d] %(message)s',
-'%Y-%m-%d %H:%M:%S')
-
-'''
-def tomark(code):
-    return CODE_MARK_MAP[code]
-
-
-def tocode(mark):
-    return 1 if mark == 'O' else 2
-
-
-def next_mark(mark):
-    return 'X' if mark == 'O' else 'O'
-
-
-def agent_by_mark(agents, mark):
-    for agent in agents:
-        if agent.mark == mark:
-    return agent
-
-
-def after_action_state(state, action):
-    """Execute an action and returns resulted state.
-
-    Args:
-    state (tuple): Board status + mark
-    action (int): Action to run
-
-    Returns:
-    tuple: New state
-    """
-
-    board, mark = state
-    nboard = list(board[:])
-    nboard[action] = tocode(mark)
-    nboard = tuple(nboard)
-    return nboard, next_mark(mark)
-
-
-def check_game_status(board):
-    """Return game status by current board status.
-
-    Args:
-    board (list): Current board state
-
-    Returns:
-    int:
-    -1: game in progress
-    0: draw game,
-    1 or 2 for finished game(winner mark code).
-    """
-    for t in [1, 2]:
-    for j in range(0, 9, 3):
-    if [t] * 3 == [board[i] for i in range(j, j+3)]:
-    return t
-    for j in range(0, 3):
-    if board[j] == t and board[j+3] == t and board[j+6] == t:
-    return t
-    if board[0] == t and board[4] == t and board[8] == t:
-    return t
-    if board[2] == t and board[4] == t and board[6] == t:
-    return t
-
-    for i in range(9):
-    if board[i] == 0:
-    # still playing
-    return -1
-
-    # draw game
-    return 0
-
-'''
-
-class DailyTradingEnv(gym.Env):
-    metadata = {'render.modes': ['human']}
-
-    def __init__(self, alpha=0.02, show_number=False):
-        self.action_space = spaces.Discrete(NUM_ACTION)
-        self.observation_space = spaces.Discrete(NUM_STATE_INFO)
-        self.alpha = alpha
-        self.set_start_mark('O')
-        self.show_number = show_number
-
-        # 잔고, 평균매입가, 매입수량, 매입가치, 매입가치포함 잔고, 수익률
-        self.balance = START_AMT
-        self.buying_avramt = 0
-        self.buying_volume = 0
-        self.buying_value = 0
-        self.return_value = 0
-        self.return_rate = 0
-
-        self.tictime = '090000'
-        #self.next_stat = null
-        #self._seed()
         self.mydb = Mydb()
         self.reset()
+
+    # Standardization
+    def _data_standardization(self, x):
+        x_np = np.asarray(x)
+        return (x_np - x_np.mean()) / x_np.std()
+
+    # 너무 작거나 너무 큰 값이 학습을 방해하는 것을 방지하고자 정규화한다
+    # x가 양수라는 가정하에 최소값과 최대값을 이용하여 0~1사이의 값으로 변환
+    # Min-Max scaling
+    def _min_max_scaling(self, x):
+        x_np = np.asarray(x)
+        return (x_np - x_np.min()) / (x_np.max() - x_np.min() + 1e-7)  # 1e-7은 0으로 나누는 오류 예방차원
+
+    # 정규화된 값을 원래의 값으로 되돌린다
+    # 정규화하기 이전의 org_x값과 되돌리고 싶은 x를 입력하면 역정규화된 값을 리턴한다
+    def reverse_min_max_scaling(self, org_x, x):
+        org_x_np = np.asarray(org_x)
+        x_np = np.asarray(x)
+        return (x_np * (org_x_np.max() - org_x_np.min() + 1e-7)) + org_x_np.min()
 
     def set_start_mark(self, mark):
         self.start_mark = mark
@@ -177,6 +89,58 @@ class DailyTradingEnv(gym.Env):
 
         self.tictime = hour_c + min_c + sec_c
 
+    def _build_data_set(self, xy):
+        # 데이터의위치변경진행
+        close = xy[:, [-1]]  # close copy
+        temp = np.delete(xy, 4, 1)
+        self.volume = temp[:, [-1]]  # volume copy
+        temp = np.delete(xy, 3, 1)  # delete volume
+        self.price = np.concatenate((temp, close), axis=1)  # axis=1, 세로로 합친다
+
+        self.norm_price = self._min_max_scaling(self.price)  # 가격형태 데이터 정규화 처리
+        print("price.shape: ", self.price.shape)
+        print("price[0]: ", self.price[0])
+        print("norm_price[0]: ", self.norm_price[0])
+        print("=" * 100)  # 화면상 구분용
+
+        self.norm_volume = self._min_max_scaling(self.volume)  # 거래량형태 데이터 정규화 처리
+        print("volume.shape: ", self.volume.shape)
+        print("volume[0]: ", self.volume[0])
+        print("norm_volume[0]: ", self.norm_volume[0])
+        print("=" * 100)  # 화면상 구분용
+
+        xy = np.concatenate((self.norm_price, self.norm_volume), axis=1)  # axis=1, 세로로 합친다
+
+        x = self.xy = xy
+        y = xy[:, [-2]]  # Close as label
+
+        # build a dataset
+        dataX = []
+        dataY = []
+        for i in range(0, len(y) - self._seq_length):
+            _x = x[i:i + self._seq_length]
+            _y = y[i + self._seq_length]  # Next close price
+            print(_x, "->", _y)
+            dataX.append(_x)
+            dataY.append(_y)
+
+        # train/test split
+        self.train_size = int(len(dataY) * self._test_date_rate)
+        self.test_size = len(dataY) - self.train_size
+        self.trainX, self.testX = np.array(dataX[0:self.train_size]), np.array(
+            dataX[self.train_size:len(dataX)])
+        self.trainY, self.testY = np.array(dataY[0:self.train_size]), np.array(
+            dataY[self.train_size:len(dataY)])
+
+    def _get_state_file_data(self):
+        # Open, High, Low, Volume, Close
+        xy = np.loadtxt(self._file_path, delimiter=',')
+        xy = xy[::-1]  # reverse order (chronically ordered)
+        return xy
+
+    def get_recent_data(self):
+        return np.array([self.xy[len(self.xy) - self._seq_length:]])
+
     def _get_state_data(self):
 
         #sql = "SELECT a.stock_code, a.date, a.datetime, a.open, a.high, a.low, a.close, a.volume, a.firstbuy \
@@ -199,71 +163,12 @@ class DailyTradingEnv(gym.Env):
 
         return array
 
-    def _get_return_value(self, close, balance, buying_volume):
-        sell_value = (close - close * 0.315 / 100) * buying_volume if buying_volume > 0 else 0
-        return(int(balance + sell_value))
-
-    def _get_return_rate(self, return_value):
-        return(int((return_value - START_AMT) / START_AMT * 100))
-
     def reset(self):
-        self.board = [0] * NUM_STATE_INFO
-        self.tic_que = self._get_state_data()
-        #self.done = False
-        #return self._get_obs()
-
-    def step(self, action):
-        """Step environment by action.
-
-        Args:
-        action (int): Location
-
-        Returns:
-        list: Obeservation
-        int: Reward
-        bool: Done
-        dict: Additional information
-        행동, next 환경, 결과, 보상
-        """
-        assert self.action_space.contains(action)
-
-        #loc = action
-        #if self.done:
-        #    return self._get_obs(), 0, True, None
-
-        reward = NO_REWARD
-        # place
-        temp = self.tic_que.popleft()
-        self.board = _toboard(temp, action)
-
-        reward, status = _check_game_status()
-        logging.debug("check_game_status board {} reward '{}'"
-        " status {}".format(self.board, reward, status))
-        if status > 0:
-            self.done = True
-
-        # switch turn
-        return self._get_obs(), reward, self.done, None
-
-
-    def _get_obs(self):
-        return tuple(self.board)
-
-    def render(self, mode='human', close=False):
-        if close:
-            return
-        if mode == 'human':
-            print(self.board)
+        if self._data_type == 'File':
+            xy = self._get_state_file_data()
         else:
-             self._show_board(logging.info)
-             logging.info('')
-    def _show_result(self, showfn, reward):
-        status = check_game_status(self.board)
-        assert status > 0
-        msg = "ReturnRate '{}'!".format(self.return_rate)
-        showfn("==== Finished: {} ====".format(msg))
-        showfn('')
-
+            xy = self._get_state_data()
+        self._build_data_set(xy)
 
 
 class Mydb():
