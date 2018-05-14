@@ -6,6 +6,12 @@ from io import BytesIO
 import pymysql
 from collections import deque
 
+OPEN = 0
+HIGH = 1
+LOW = 2
+CLOSE = 3
+VOLUME = 4
+
 class DailyTradingEnv():
 
     def __init__(self, seq_length, test_date_rate, data_type, file_path):
@@ -13,6 +19,14 @@ class DailyTradingEnv():
         self._test_date_rate = test_date_rate
         self._data_type = data_type
         self._file_path = file_path
+        # Open, High, Low, Volume, Close
+        self.train_size = None
+        self.trainX = None
+        self.trainY = None
+
+        self.test_size = None
+        self.testX = None
+        self.testY = None
 
         self.mydb = Mydb()
         self.reset()
@@ -36,59 +50,6 @@ class DailyTradingEnv():
         x_np = np.asarray(x)
         return (x_np * (org_x_np.max() - org_x_np.min() + 1e-7)) + org_x_np.min()
 
-    def set_start_mark(self, mark):
-        self.start_mark = mark
-
-    def _firtstbuy(self, amt):
-        if amt < 5000 :
-            unit = 5
-        elif amt < 10000 :
-            unit = 10
-        elif amt < 50000 :
-            unit = 50
-        elif amt < 100000 :
-            unit = 100
-        elif amt < 500000 :
-            unit = 500
-        else :
-            unit = 1000
-
-        amt += unit
-        return amt
-
-    def _add_tic(self):
-        hour = int(self.tictime[:2])
-        min = int(self.tictime[2:4])
-        sec = int(self.tictime[4:6])
-
-        if sec == 59:
-            sec = 0
-            if min == 59:
-                min = 0
-                hour += 1
-            else:
-                min += 1
-        else:
-            sec += 1
-
-        if sec < 10:
-            sec_c = '0' + str(sec)
-        else:
-            sec_c = str(sec)
-
-        if min < 10:
-            min_c = '0' + str(min)
-        else:
-            min_c = str(min)
-
-        if hour < 10:
-            hour_c = '0' + str(hour)
-        else:
-            hour_c = str(hour)
-
-
-        self.tictime = hour_c + min_c + sec_c
-
     def _build_data_set(self, xy):
         # 데이터의위치변경진행
         close = xy[:, [-1]]  # close copy
@@ -110,9 +71,10 @@ class DailyTradingEnv():
         print("=" * 100)  # 화면상 구분용
 
         xy = np.concatenate((self.norm_price, self.norm_volume), axis=1)  # axis=1, 세로로 합친다
-
+        # Open, High, Low, Close, Volume
         x = self.xy = xy
-        y = xy[:, [-2]]  # Close as label
+        y = self.xy = xy
+        #y = xy[:, [-2]]  # Close as label
 
         # build a dataset
         dataX = []

@@ -183,8 +183,8 @@ class LstmModelF():
 
             accuracy_ = accuracy.eval(session=sess, feed_dict=train_data_feed)
 
-            if epoch % 100:
-                self.save_model()
+            #if epoch % 100:
+                #self.save_model()
 
             # record values
             self._history['loss'].append(loss_)
