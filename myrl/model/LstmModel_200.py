@@ -100,18 +100,18 @@ class LstmModelF():
     def evaluate(self, X_test, Y_test, p_batch_size):
 
         self.keep_prob = 1.0
-        state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
-
-        test_data_feed = {
-            self._x: X_test,
-            self._t: Y_test,
-            self._batch_size: p_batch_size,
-            self._learning_rate: 0.0,
-            self._keep_prob: 1.0,
-            self._initial_state: state
-        }
-
-        self.result_y = self._y.eval(session=self._sess, feed_dict=test_data_feed)
+        for i in range(0, lan(Y_test)):
+            state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
+            test_data_feed = {
+                self._x: X_test[i],
+                self._t: Y_test[i],
+                self._batch_size: p_batch_size,
+                self._learning_rate: 0.0,
+                self._keep_prob: 1.0,
+                self._initial_state: state
+            }
+        #self.result_y = self._y.eval(session=self._sess, feed_dict=test_data_feed)
+            self.result_y.append(self._y.eval(session=self._sess, feed_dict=test_data_feed))
         accuracy = self.accuracy(self._y, self._t)
         return accuracy.eval(session=self._sess, feed_dict=test_data_feed)
 
@@ -149,30 +149,40 @@ class LstmModelF():
         self._sess = tf.Session()
         self._sess.run(init)
 
-    def fit(self, X_train, Y_train,
-            epochs=100, p_batch_size=100, p_keep=0.5, p_learning_rate=0.01,
-            verbose=1):
+    def fit(self, X_train, Y_train, epochs, p_batch_size, p_keep, p_learning_rate, index_init, verbose=1):
 
         self.keep_prob = p_keep
 
-        state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
-
-        train_data_feed = {
-            self._x: X_train,
-            self._t: Y_train,
-            self._batch_size: p_batch_size,
-            self._learning_rate: p_learning_rate,
-            self._keep_prob: p_keep,
-            self._initial_state: state
-        }
-
         for epoch in range(epochs):
-            #initial_state = state = stacked_lstm.zero_state(batch_size, tf.float32)
-            self._sess.run(self._train_step, feed_dict=train_data_feed)
+            for i in range(0, len(Y_train)):
+                xtrain = np.reshape(X_train[i],[-1,10,5])
+                ytrain = np.reshape(Y_train[i],[-1,1])
 
-            loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
 
-            accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
+                if i==0 or index_init[i] == 1:
+                    state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
+                    train_data_feed = {
+                        self._x: xtrain,
+                        self._t: ytrain,
+                        self._batch_size: p_batch_size,
+                        self._learning_rate: p_learning_rate,
+                        self._keep_prob: p_keep,
+                        self._initial_state: state
+                    }
+                else:
+                    train_data_feed = {
+                        self._x: xtrain,
+                        self._t: ytrain,
+                        self._batch_size: p_batch_size,
+                        self._learning_rate: p_learning_rate,
+                        self._keep_prob: p_keep
+                    }
+
+                self._sess.run(self._train_step, feed_dict=train_data_feed)
+
+                #loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
+
+                #accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
 
             #if epoch % 100:
                 #self.save_model()
