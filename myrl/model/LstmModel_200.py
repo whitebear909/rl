@@ -97,20 +97,31 @@ class LstmModelF():
         # with tf.name_scope("tensorboard") as scope:
         # tensorboard --logdir=./logs/lstm_logs_r0_01
 
-    def evaluate(self, X_test, Y_test, p_batch_size):
+    def evaluate(self, X_test, Y_test, p_batch_size, index_init):
+        for i in range(0, len(Y_test)):
+            xtest = np.reshape(X_test[i], [-1, self.n_seq, self.n_in])
+            ytest = np.reshape(Y_test[i], [-1, self.n_out])
+            # 종목 변경에 따라 state를 초기화 하는 로직
+            if i == 0 or index_init[i] == 1:
+                state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
+                test_data_feed = {
+                    self._x: xtest,
+                    self._t: ytest,
+                    self._batch_size: p_batch_size,
+                    self._learning_rate: 0.0,
+                    self._keep_prob: 1.0,
+                    self._initial_state: state
+                }
+            else:
+                test_data_feed = {
+                    self._x: xtest,
+                    self._t: ytest,
+                    self._batch_size: p_batch_size,
+                    self._learning_rate: 0.0,
+                    self._keep_prob: 1.0,
+                }
 
-        self.keep_prob = 1.0
-        for i in range(0, lan(Y_test)):
-            state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
-            test_data_feed = {
-                self._x: X_test[i],
-                self._t: Y_test[i],
-                self._batch_size: p_batch_size,
-                self._learning_rate: 0.0,
-                self._keep_prob: 1.0,
-                self._initial_state: state
-            }
-        #self.result_y = self._y.eval(session=self._sess, feed_dict=test_data_feed)
+            #self.result_y = self._y.eval(session=self._sess, feed_dict=test_data_feed)
             self.result_y.append(self._y.eval(session=self._sess, feed_dict=test_data_feed))
         accuracy = self.accuracy(self._y, self._t)
         return accuracy.eval(session=self._sess, feed_dict=test_data_feed)
@@ -149,16 +160,13 @@ class LstmModelF():
         self._sess = tf.Session()
         self._sess.run(init)
 
-    def fit(self, X_train, Y_train, epochs, p_batch_size, p_keep, p_learning_rate, index_init, verbose=1):
-
-        self.keep_prob = p_keep
-
+    def fit(self, X_train, Y_train, epochs, p_batch_size, p_learning_rate, index_init, verbose=1):
         for epoch in range(epochs):
             for i in range(0, len(Y_train)):
-                xtrain = np.reshape(X_train[i],[-1,10,5])
-                ytrain = np.reshape(Y_train[i],[-1,1])
+                xtrain = np.reshape(X_train[i],[-1,self.n_seq, self.n_in])
+                ytrain = np.reshape(Y_train[i],[-1,self.n_out])
 
-
+                #종목 변경에 따라 state를 초기화 하는 로직
                 if i==0 or index_init[i] == 1:
                     state = self._sess.run(self._cell.zero_state(p_batch_size, tf.float32))
                     train_data_feed = {
@@ -166,7 +174,7 @@ class LstmModelF():
                         self._t: ytrain,
                         self._batch_size: p_batch_size,
                         self._learning_rate: p_learning_rate,
-                        self._keep_prob: p_keep,
+                        self._keep_prob: self.keep_prob,
                         self._initial_state: state
                     }
                 else:
@@ -175,17 +183,17 @@ class LstmModelF():
                         self._t: ytrain,
                         self._batch_size: p_batch_size,
                         self._learning_rate: p_learning_rate,
-                        self._keep_prob: p_keep
+                        self._keep_prob:  self.keep_prob
                     }
 
                 self._sess.run(self._train_step, feed_dict=train_data_feed)
 
-                #loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
-
-                #accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
-
-            #if epoch % 100:
-                #self.save_model()
+                loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
+                accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
+                #loss_.append(self._loss.eval(session=self._sess, feed_dict=train_data_feed))
+                #accuracy_.append(self._accuracy.eval(session=self._sess, feed_dict=train_data_feed))
+            if epoch % 50:
+                self.save_model()
 
             # record values
             self._history['loss'].append(loss_)

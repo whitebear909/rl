@@ -18,29 +18,6 @@ if "DISPLAY" not in os.environ:
 
 import matplotlib.pyplot as plt
 
-
-def MinMaxScaler(data):
-    ''' Min Max Normalization
-    Parameters
-    ----------
-    data : numpy.ndarray
-        input data to be normalized
-        shape: [Batch size, dimension]
-    Returns
-    ----------
-    data : numpy.ndarry
-        normalized data
-        shape: [Batch size, dimension]
-    References
-    ----------
-    .. [1] http://sebastianraschka.com/Articles/2014_about_feature_scaling.html
-    '''
-    numerator = data - np.min(data, 0)
-    denominator = np.max(data, 0) - np.min(data, 0)
-    # noise term prevents the zero division
-    return numerator / (denominator + 1e-7)
-
-
 if __name__ == '__main__':
 
     # train Parameters
@@ -67,12 +44,28 @@ if __name__ == '__main__':
     model.fit(env.trainX, env.trainY,
               nb_epoch,
               batch_size,
-              p_keep,
               p_learning_rate,
               env.train_index,
               1)
 
-    accuracy = model.evaluate(env.testX, env.testY, env.test_size)
+    accuracy = model.evaluate(env.testX, env.testY, batch_size, env.test_index)
+
+    # Plot predictions
+    plt.plot(env.testY)
+    plt.plot(np.array([xi for xi in model.result_y]))
+    plt.xlabel("Time Period")
+    plt.ylabel("Stock Price")
+    plt.show()
+
+    fig = plt.figure()
+    ax_acc = fig.add_subplot(111) #axis accuracy
+    ax_acc.plot(range(nb_epoch),model._history['accuracy'], label='rmse', color='black')
+
+    ax_acc = ax_acc.twinx()  # axis loss
+    ax_acc.plot(range(nb_epoch), model._history['loss'], label='loss', color='red')
+
+    plt.xlabel("epoch")
+    plt.show()
 
     #print('accuracy: ', accuracy)
 
