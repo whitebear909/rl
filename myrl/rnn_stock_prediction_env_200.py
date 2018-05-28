@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
     # Plot predictions
     plt.plot(env.testY)
-    plt.plot(np.array([xi for xi in model.result_y]))
+    plt.plot(np.reshape(model.result_y,[-1,1]))
     plt.xlabel("Time Period")
     plt.ylabel("Stock Price")
     plt.show()
