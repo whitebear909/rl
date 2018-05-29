@@ -6,12 +6,6 @@ from io import BytesIO
 import pymysql
 from collections import deque
 
-OPEN = 0
-HIGH = 1
-LOW = 2
-CLOSE = 3
-VOLUME = 4
-
 class DailyTradingEnv():
 
     def __init__(self, seq_length, test_date_rate, data_type, file_path):
@@ -206,10 +200,10 @@ class DailyTradingEnv():
         else:
             xy = self._get_state_data()
 
-        if self._file_path ==  './20100101_sample.txt':
-            self._build_data_set_200(xy)
-        else:
-            self._build_data_set(xy)
+        #if self._file_path ==  './20100101_sample.txt':
+        self._build_data_set_200(xy)
+        #else:
+        #    self._build_data_set(xy)
 
 
 class Mydb():

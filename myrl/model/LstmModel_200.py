@@ -15,12 +15,12 @@ class LstmModelF():
         self.n_in = n_in
         self.number_of_layers = n_layers
         self.n_out = n_out
-        self.weights = []
-        self.biases = []
         self.result_y = []
         self.forget_bias = 1.0  # 망각편향(기본값 1.0)
         self.keep_prob = keep_prob
 
+        # 학습에 직접적으로 사용하지 않고 학습 횟수에 따라 단순히 증가시킬 변수를 만듭니다.
+        self._global_step = None
         self._x = None
         self._t = None
         self._ylist = None
@@ -69,8 +69,6 @@ class LstmModelF():
         y = tf.contrib.layers.fully_connected(
             outputs[:, -1], self.n_out, activation_fn=tf.identity)  # We use the last cell's output
 
-        self._saver = tf.train.Saver()
-
         return y
 
     def loss(self, y, t):
@@ -83,7 +81,7 @@ class LstmModelF():
     def trainging(self, loss, learning_rate):
 
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        train_step = optimizer.minimize(loss)
+        train_step = optimizer.minimize(loss, global_step=self._global_step)
 
         return train_step
 
@@ -145,6 +143,7 @@ class LstmModelF():
         return self.result_y
 
     def make_model(self):
+        self._global_step = tf.Variable(0, trainable=False, name='global_step')
         self._x = tf.placeholder(tf.float32, [None, self.n_seq, self.n_in])
         self._t = tf.placeholder(tf.float32, [None, self.n_out])
         self._keep_prob = tf.placeholder(tf.float32, None, name="keep_prob")
@@ -156,9 +155,15 @@ class LstmModelF():
         self._train_step = self.trainging(self._loss, self._learning_rate)
         self._accuracy = self.accuracy(self._y, self._t)
 
-        init = tf.global_variables_initializer()
         self._sess = tf.Session()
-        self._sess.run(init)
+        self._saver = tf.train.Saver()
+
+        ckpt = tf.train.get_checkpoint_state('./savemodel')
+        if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+            self._saver.restore(self._sess, ckpt.model_checkpoint_path)
+        else:
+            self._sess.run(tf.global_variables_initializer())
+
 
     def fit(self, X_train, Y_train, epochs, p_batch_size, p_learning_rate, index_init, verbose=1):
         for epoch in range(epochs):
@@ -187,13 +192,15 @@ class LstmModelF():
                     }
 
                 self._sess.run(self._train_step, feed_dict=train_data_feed)
-
                 loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
                 accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
                 #loss_.append(self._loss.eval(session=self._sess, feed_dict=train_data_feed))
                 #accuracy_.append(self._accuracy.eval(session=self._sess, feed_dict=train_data_feed))
-            if epoch % 50:
-                self.save_model()
+
+            print('Step: %d, Loss: %d, accuracy: %d ' % self._sess.run(self._global_step) %loss_ %accuracy_)
+
+            #if epoch % 50:
+                #self.save_model()
 
             # record values
             self._history['loss'].append(loss_)
@@ -204,6 +211,8 @@ class LstmModelF():
                       ' loss:', loss_,
                       ' rmse:', accuracy_)
 
+        # 최적화가 끝난 뒤, 변수를 저장합니다.
+        self._saver.save(self._sess, './savemodel/lstm.ckpt', global_step=self._global_step)
         return self._history
 
     def save_model(self):
