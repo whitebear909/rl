@@ -24,11 +24,13 @@ if __name__ == '__main__':
     seq_length = 10
     test_date_rate = 0.7
     data_type = 'File'
-    file_path = './20100101_sample.txt'
+    #file_path = './20100101_sample.txt'
+    file_path = './20100101.txt'
+    #file_path = './20100101_sample.csv'
     #file_path = './data-02-stock_daily.csv'
     n_layers = 3
     cell_units = 128
-    nb_epoch = 50
+    nb_epoch = 200
     #nb_epoch = 1
     batch_size = 1
     p_keep = 1.0
@@ -38,21 +40,15 @@ if __name__ == '__main__':
 
     env = DailyTradingEnv(seq_length, test_date_rate, data_type, file_path)
 
-    model = LstmModelF("CLOSE", len(env.trainX[0][0]), 1, seq_length,
-                       n_layers, cell_units, p_keep)
+    model = LstmModelF("CLOSE", len(env.trainX[0][0][0]), 1, seq_length, n_layers, cell_units, p_keep)
 
-    model.fit(env.trainX, env.trainY,
-              nb_epoch,
-              batch_size,
-              p_learning_rate,
-              env.train_index,
-              1)
+    model.fit(env.trainX, env.trainY, nb_epoch, p_learning_rate, 1)
 
-    accuracy = model.evaluate(env.testX, env.testY, batch_size, env.test_index)
+    accuracy = model.evaluate(env.testX, env.testY)
 
     # Plot predictions
-    plt.plot(env.testY)
-    plt.plot(np.reshape(model.result_y,[-1,1]))
+    plt.plot(np.reshape(env.testY[0],[-1,1]))
+    plt.plot(model.result_y)
     plt.xlabel("Time Period")
     plt.ylabel("Stock Price")
     plt.show()
@@ -82,4 +78,4 @@ if __name__ == '__main__':
 
     print("test_predict", test_predict[0])
     test_predict = env.reverse_min_max_scaling(env.price, test_predict)  # 금액데이터 역정규화한다
-    print("Tomorrow's stock price", test_predict[0])  # 예측한 주가를 출력한다
+    print("Tomorrow's stock price", test_predict[0]) # 예측한 주가를 출력한다

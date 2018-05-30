@@ -15,12 +15,12 @@ class DailyTradingEnv():
         self._file_path = file_path
         # Open, High, Low, Volume, Close
         self.train_size = None
-        self.trainX = None
-        self.trainY = None
+        self.trainX = []
+        self.trainY = []
 
         self.test_size = None
-        self.testX = None
-        self.testY = None
+        self.testX = []
+        self.testY = []
 
         #self.mydb = Mydb()
         self.reset()
@@ -74,44 +74,39 @@ class DailyTradingEnv():
         dataX = []
         dataY = []
 
-        self.index_init = []
         index = 0
-        change_stock = False
-        for i in range(0,len(y) - self._seq_length):
-            if change_stock == True and index != i:
+        stock = xy[0][0]
+        count = 0
+        # 199 : 1 = train : test
+        for i in range(0,len(y)):
+            if stock == xy[i][0] and i < len(y)-1:
                 continue
+            if i < len(y)-1:
+                stock_x = x[index:i]
+                stock_y = y[index:i]
+            else:
+                stock_x = x[index:i+1]
+                stock_y = y[index:i+1]
+
+            temp_dataX = []
+            temp_dataY = []
+            for j in range(0, len(stock_y) - self._seq_length):
+                split_x = stock_x[j:j + self._seq_length]
+                split_y = stock_y[j + self._seq_length]  # Next close price
+                print(split_x, "->", split_y)
+                temp_dataX.append(split_x)
+                temp_dataY.append(split_y)
+
+            if count < 199:
+                self.trainX.append(temp_dataX)
+                self.trainY.append(temp_dataY)
+            else:
+                self.testX.append(temp_dataX)
+                self.testY.append(temp_dataY)
 
             stock = xy[i][0]
-            append_tf = True
-            for j in (i+1, i+self._seq_length):
-                if stock != xy[j][0]:
-                    index = j
-                    append_tf = False
-                    change_stock = True
-                    break
-            if append_tf == True:
-                if change_stock == True:
-                    self.index_init.append(1)
-                    change_stock = False
-                else:
-                    self.index_init.append(0)
-                _x = x[i:i + self._seq_length]
-                _y = y[i + self._seq_length]  # Next close price
-                print(_x, "->", _y)
-                dataX.append(_x)
-                dataY.append(_y)
-                index = index + 1
-
-        # train/test split
-        self.train_size = int(len(dataY) * self._test_date_rate)
-        self.test_size = len(dataY) - self.train_size
-        self.train_index, self.test_index = np.array(self.index_init[0:self.train_size]), np.array(
-            self.index_init[self.train_size:len(self.index_init)])
-        self.trainX, self.testX = np.array(dataX[0:self.train_size]), np.array(
-            dataX[self.train_size:len(dataX)])
-        self.trainY, self.testY = np.array(dataY[0:self.train_size]), np.array(
-            dataY[self.train_size:len(dataY)])
-
+            index = i
+            count += 1
 
     def _build_data_set(self, xy):
         # 데이터의위치변경진행
@@ -158,7 +153,8 @@ class DailyTradingEnv():
             dataY[self.train_size:len(dataY)])
 
     def _get_state_file_data(self):
-        if self._file_path == './20100101_sample.txt':
+        #if self._file_path == './20100101_sample.csv':
+        if self._file_path == './20100101.txt':
             # stock, date, Open, High, Low, Volume, Close
             xy = np.loadtxt(self._file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
         else:
