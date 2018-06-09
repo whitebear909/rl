@@ -184,13 +184,13 @@ class LstmModelF():
                     self._history['loss'].append(loss_)
                     self._history['accuracy'].append(accuracy_)
 
-                    if verbose and not (epoch % 50):
-                        print('g_epoch:', global_epochs,
-                              ' epoch:', epoch,
-                              ' loss:', loss_,
-                              ' rmse:', accuracy_,
-                              ' step:', self._sess.run(self._global_step)
-                              )
+                if verbose:
+                    print('g_epoch:', global_epochs,
+                          ' epoch:', epoch,
+                          ' loss:', loss_,
+                          ' rmse:', accuracy_,
+                          ' step:', self._sess.run(self._global_step)
+                          )
 
             # 최적화가 끝난 뒤, 변수를 저장합니다.
             self._saver.save(self._sess, './savemodel/lstm.ckpt', global_step=self._global_step)
