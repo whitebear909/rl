@@ -154,44 +154,44 @@ class LstmModelF():
         else:
             self._sess.run(tf.global_variables_initializer())
 
-    def fit(self, X_train, Y_train, global_epochs, stock_epochs, p_learning_rate, verbose=1):
-        for g in range(0, global_epochs):
-            for i in range(0, len(Y_train)):
 
-                xtrain = np.reshape(X_train[i], [-1, 10, 5])
-                ytrain = np.reshape(Y_train[i], [-1, 1])
+    def fit(self, X_train, Y_train, epochs, p_learning_rate, verbose=1):
+        for i in range(0, len(Y_train)):
 
-                batch_size = len(ytrain)
+            xtrain = np.reshape(X_train[i],[-1,10,5])
+            ytrain = np.reshape(Y_train[i],[-1,1])
 
-                state = self._sess.run(self._cell.zero_state(batch_size, tf.float32))
+            batch_size = len(ytrain)
+            
+            state = self._sess.run(self._cell.zero_state(batch_size, tf.float32))
+            
+            for epoch in range(epochs):
+                
+                train_data_feed = {
+                    self._x: xtrain,
+                    self._t: ytrain,
+                    self._batch_size: batch_size,
+                    self._learning_rate: p_learning_rate,
+                    self._keep_prob: self.keep_prob,
+                    self._initial_state: state
+                }
+                
+                self._sess.run(self._train_step, feed_dict=train_data_feed)
+                loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
+                accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
 
-                for epoch in range(stock_epochs):
+                self._history['loss'].append(loss_)
+                self._history['accuracy'].append(accuracy_)
 
-                    train_data_feed = {
-                        self._x: xtrain,
-                        self._t: ytrain,
-                        self._batch_size: batch_size,
-                        self._learning_rate: p_learning_rate,
-                        self._keep_prob: self.keep_prob,
-                        self._initial_state: state
-                    }
+                if verbose and not (epoch % 50):
+                    print('epoch:', epoch,
+                          ' loss:', loss_,
+                          ' rmse:', accuracy_,
+                          ' step:', self._sess.run(self._global_step)
+                          )
 
-                    self._sess.run(self._train_step, feed_dict=train_data_feed)
-                    loss_ = self._loss.eval(session=self._sess, feed_dict=train_data_feed)
-                    accuracy_ = self._accuracy.eval(session=self._sess, feed_dict=train_data_feed)
-
-                    self._history['loss'].append(loss_)
-                    self._history['accuracy'].append(accuracy_)
-
-                    if verbose and not (epoch % 50):
-                        print('epoch:', epoch,
-                              ' loss:', loss_,
-                              ' rmse:', accuracy_,
-                              ' step:', self._sess.run(self._global_step)
-                              )
-
-            # 최적화가 끝난 뒤, 변수를 저장합니다.
-            self._saver.save(self._sess, './savemodel/lstm.ckpt', global_step=self._global_step)
+        # 최적화가 끝난 뒤, 변수를 저장합니다.
+        self._saver.save(self._sess, './savemodel/lstm.ckpt', global_step=self._global_step)
         return self._history
 
     def save_model(self):
