@@ -24,23 +24,27 @@ if __name__ == '__main__':
     seq_length = 10
     test_date_rate = 0.7
     data_type = 'File'
-    file_path = './20100101_sample.txt'
+    #train_file_path = './20100101_sample.txt'
+    train_file_path = './before_2018_200.csv'
+    test_file_path = './2018_030200.csv'
+    #file_path = './20100101_sample.csv'
     #file_path = './data-02-stock_daily.csv'
     n_layers = 3
-    cell_units = 128
-    nb_epoch = 400
+    cell_units = 256
+    global_epoch = 10
+    nb_epoch = 30
     #nb_epoch = 1
     batch_size = 1
     p_keep = 1.0
-    p_learning_rate = 0.001
+    p_learning_rate = 0.0001
     n_training_stock = 200
     predict_days = 5
 
-    env = DailyTradingEnv(seq_length, test_date_rate, data_type, file_path)
+    env = DailyTradingEnv(seq_length, test_date_rate, data_type, train_file_path, test_file_path)
 
     model = LstmModelF("CLOSE", len(env.trainX[0][0][0]), 1, seq_length, n_layers, cell_units, p_keep)
 
-    model.fit(env.trainX, env.trainY, nb_epoch, p_learning_rate, 1)
+    model.fit(env.trainX, env.trainY, global_epoch, nb_epoch, p_learning_rate, 1)
 
     accuracy = model.evaluate(env.testX, env.testY)
 
@@ -51,6 +55,8 @@ if __name__ == '__main__':
     plt.ylabel("Stock Price")
     plt.show()
 
+    #need to add multi stocks processing
+    '''
     fig = plt.figure()
     ax_acc = fig.add_subplot(111) #axis accuracy
     ax_acc.plot(range(nb_epoch),model._history['accuracy'], label='rmse', color='black')
@@ -60,6 +66,7 @@ if __name__ == '__main__':
 
     plt.xlabel("epoch")
     plt.show()
+    '''
 
     #print('accuracy: ', accuracy)
 
@@ -76,4 +83,4 @@ if __name__ == '__main__':
 
     print("test_predict", test_predict[0])
     test_predict = env.reverse_min_max_scaling(env.price, test_predict)  # 금액데이터 역정규화한다
-print("Tomorrow's stock price", test_predict[0]) # 예측한 주가를 출력한다
+    print("Tomorrow's stock price", test_predict[0]) # 예측한 주가를 출력한다

@@ -6,13 +6,17 @@ from io import BytesIO
 import pymysql
 from collections import deque
 
+TRAIN_DATA = 0
+TEST_DATA = 1
+
 class DailyTradingEnv():
 
-    def __init__(self, seq_length, test_date_rate, data_type, file_path):
+    def __init__(self, seq_length, test_date_rate, data_type, train_file_path, test_file_path):
         self._seq_length = seq_length
         self._test_date_rate = test_date_rate
         self._data_type = data_type
-        self._file_path = file_path
+        self._train_file_path = train_file_path
+        self._test_file_path = test_file_path
         # Open, High, Low, Volume, Close
         self.train_size = None
         self.trainX = []
@@ -24,6 +28,7 @@ class DailyTradingEnv():
 
         #self.mydb = Mydb()
         self.reset()
+
 
     # Standardization
     def _data_standardization(self, x):
@@ -44,7 +49,7 @@ class DailyTradingEnv():
         x_np = np.asarray(x)
         return (x_np * (org_x_np.max() - org_x_np.min() + 1e-7)) + org_x_np.min()
 
-    def _build_data_set_200(self, xy):
+    def _build_data_set_200(self, xy, data_type):
         # stock, date, Open, High, Low, Volume, Close
         # 데이터의위치변경진행
         self.volume = xy[:, [-2]]  # volume copy
@@ -97,7 +102,7 @@ class DailyTradingEnv():
                 temp_dataX.append(split_x)
                 temp_dataY.append(split_y)
 
-            if count < 1:
+            if data_type == TRAIN_DATA:
                 self.trainX.append(temp_dataX)
                 self.trainY.append(temp_dataY)
             else:
@@ -153,15 +158,16 @@ class DailyTradingEnv():
             dataY[self.train_size:len(dataY)])
 
     def _get_state_file_data(self):
-        if self._file_path == './20100101_sample.txt':
-            # stock, date, Open, High, Low, Volume, Close
-            xy = np.loadtxt(self._file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
-        else:
-            # Open, High, Low, Volume, Close
-            xy = np.loadtxt(self._file_path, delimiter=',')
-            xy = xy[::-1]  # reverse order (chronically ordered)
-
-        return xy
+        if self._test_file_path != None: #200 Stocks Data'
+            # Data format : stock, date, Open, High, Low, Volume, Close
+            train_xy = np.loadtxt(self._train_file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
+            test_xy = np.loadtxt(self._test_file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
+        else: #Just One Stock Data : 20100101_sample.csv'
+            # Data format : Open, High, Low, Volume, Close
+            train_xy = np.loadtxt(self._train_file_path, delimiter=',')
+            train_xy = train_xy[::-1]  # reverse order (chronically ordered)
+            test_xy = None
+        return train_xy, test_xy
 
     def get_recent_data(self):
         return np.array([self.xy[len(self.xy) - self._seq_length:]])
@@ -191,14 +197,11 @@ class DailyTradingEnv():
 
     def reset(self):
         if self._data_type == 'File':
-            xy = self._get_state_file_data()
+            train_xy, test_xy = self._get_state_file_data()
+            self._build_data_set_200(train_xy, TRAIN_DATA)
+            self._build_data_set_200(test_xy, TEST_DATA)
         else:
-            xy = self._get_state_data()
-
-        #if self._file_path ==  './20100101_sample.txt':
-        self._build_data_set_200(xy)
-        #else:
-        #    self._build_data_set(xy)
+            self._build_data_set(self._get_state_data())
 
 
 class Mydb():
