@@ -2,17 +2,23 @@ import logging
 import json
 from sqlalchemy import create_engine
 import numpy as np
+import pandas as pd
 from io import BytesIO
 import pymysql
 from collections import deque
+import os
+
+TRAIN_DATA = 0
+TEST_DATA = 1
 
 class DailyTradingEnv():
 
-    def __init__(self, seq_length, test_date_rate, data_type, file_path):
+    def __init__(self, seq_length, test_date_rate, data_type, train_file_path, test_file_path):
         self._seq_length = seq_length
         self._test_date_rate = test_date_rate
         self._data_type = data_type
-        self._file_path = file_path
+        self._train_file_path = train_file_path
+        self._test_file_path = test_file_path
         # Open, High, Low, Volume, Close
         self.train_size = None
         self.trainX = []
@@ -24,6 +30,7 @@ class DailyTradingEnv():
 
         #self.mydb = Mydb()
         self.reset()
+
 
     # Standardization
     def _data_standardization(self, x):
@@ -44,7 +51,7 @@ class DailyTradingEnv():
         x_np = np.asarray(x)
         return (x_np * (org_x_np.max() - org_x_np.min() + 1e-7)) + org_x_np.min()
 
-    def _build_data_set_200(self, xy):
+    def _build_data_set_200(self, xy, data_type):
         # stock, date, Open, High, Low, Volume, Close
         # 데이터의위치변경진행
         self.volume = xy[:, [-2]]  # volume copy
@@ -97,7 +104,7 @@ class DailyTradingEnv():
                 temp_dataX.append(split_x)
                 temp_dataY.append(split_y)
 
-            if count < 199:
+            if data_type == TRAIN_DATA:
                 self.trainX.append(temp_dataX)
                 self.trainY.append(temp_dataY)
             else:
@@ -134,6 +141,8 @@ class DailyTradingEnv():
         #y = self.xy = xy
         y = xy[:, [-2]]  # Close as label
 
+        chart_data.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
+
         # build a dataset
         dataX = []
         dataY = []
@@ -153,16 +162,16 @@ class DailyTradingEnv():
             dataY[self.train_size:len(dataY)])
 
     def _get_state_file_data(self):
-        #if self._file_path == './20100101_sample.csv':
-        if self._file_path == './20100101.txt':
-            # stock, date, Open, High, Low, Volume, Close
-            xy = np.loadtxt(self._file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
-        else:
-            # Open, High, Low, Volume, Close
-            xy = np.loadtxt(self._file_path, delimiter=',')
-            xy = xy[::-1]  # reverse order (chronically ordered)
-
-        return xy
+        if self._test_file_path != None: #200 Stocks Data'
+            # Data format : stock, date, Open, High, Low, Volume, Close
+            train_xy = np.loadtxt(self._train_file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
+            test_xy = np.loadtxt(self._test_file_path, delimiter=',', usecols=(0, 2, 3, 4, 5, 6))
+        else: #Just One Stock Data : 20100101_sample.csv'
+            # Data format : Open, High, Low, Volume, Close
+            train_xy = np.loadtxt(self._train_file_path, delimiter=',')
+            train_xy = train_xy[::-1]  # reverse order (chronically ordered)
+            test_xy = None
+        return train_xy, test_xy
 
     def get_recent_data(self):
         return np.array([self.xy[len(self.xy) - self._seq_length:]])
@@ -191,15 +200,15 @@ class DailyTradingEnv():
         return array
 
     def reset(self):
-        if self._data_type == 'File':
-            xy = self._get_state_file_data()
-        else:
-            xy = self._get_state_data()
-
-        #if self._file_path ==  './20100101_sample.txt':
-        self._build_data_set_200(xy)
-        #else:
-        #    self._build_data_set(xy)
+        if self._test_file_path != None and self._data_type == 'File':
+            train_xy, test_xy = self._get_state_file_data()
+            self._build_data_set_200(train_xy, TRAIN_DATA)
+            self._build_data_set_200(test_xy, TEST_DATA)
+        elif self._test_file_path == None and self._data_type != 'File':
+            self._build_data_set(self._get_state_data())
+        elif self._test_file_path == None and self._data_type == 'File':
+            train_xy, test_xy = self._get_state_file_data()
+            self._build_data_set(train_xy)
 
 
 class Mydb():
@@ -250,8 +259,74 @@ class Mydb():
         finally:
             self.conn.close()
 
-'''
+
 if __name__ == "__main__":
-    mydb = Mydb()
-    env = DailyTradingEnv()
-'''
+    # train Parameters
+    seq_length = 10
+    test_date_rate = 0.7
+    data_type = 'File'
+    # train_file_path = './20100101_sample.txt'
+    #train_file_path = './before_2018_200.csv'
+    #test_file_path = './2018_030200.csv'
+    train_file_path = './data-02-stock_daily.csv'
+    test_file_path = None
+
+    # file_path = './20100101_sample.csv'
+    # file_path = './data-02-stock_daily.csv'
+    n_layers = 3
+    cell_units = 256
+    global_epoch = 10
+    nb_epoch = 30
+    # nb_epoch = 1
+    batch_size = 1
+    p_keep = 1.0
+    p_learning_rate = 0.0001
+    n_training_stock = 200
+    predict_days = 5
+
+    env = DailyTradingEnv(seq_length, test_date_rate, data_type, train_file_path, test_file_path)
+    # 로그 기록
+    log_dir = os.path.join(settings.BASE_DIR, 'logs/%s' % stock_code)
+    timestr = settings.get_time_str()
+    if not os.path.exists('logs/%s' % stock_code):
+        os.makedirs('logs/%s' % stock_code)
+    file_handler = logging.FileHandler(filename=os.path.join(
+        log_dir, "%s_%s.log" % (stock_code, timestr)), encoding='utf-8')
+    stream_handler = logging.StreamHandler()
+    file_handler.setLevel(logging.DEBUG)
+    stream_handler.setLevel(logging.INFO)
+    logging.basicConfig(format="%(message)s",
+                        handlers=[file_handler, stream_handler], level=logging.DEBUG)
+
+    # 주식 데이터 준비
+    chart_data = data_manager.load_chart_data(
+        os.path.join(settings.BASE_DIR,
+                     'data/chart_data/{}.csv'.format(stock_code)))
+    prep_data = data_manager.preprocess(chart_data)
+    training_data = data_manager.build_training_data(prep_data)
+
+    # 기간 필터링
+    training_data = training_data[(training_data['date'] >= '2017-01-01') &
+                                  (training_data['date'] <= '2017-12-31')]
+    training_data = training_data.dropna()
+
+    # 차트 데이터 분리
+    features_chart_data = ['date', 'open', 'high', 'low', 'close', 'volume']
+    chart_data = training_data[features_chart_data]
+
+    # 학습 데이터 분리
+    features_training_data = [
+        'open_lastclose_ratio', 'high_close_ratio', 'low_close_ratio',
+        'close_lastclose_ratio', 'volume_lastvolume_ratio',
+        'close_ma5_ratio', 'volume_ma5_ratio',
+        'close_ma10_ratio', 'volume_ma10_ratio',
+        'close_ma20_ratio', 'volume_ma20_ratio',
+        'close_ma60_ratio', 'volume_ma60_ratio',
+        'close_ma120_ratio', 'volume_ma120_ratio'
+    ]
+    training_data = training_data[features_training_data]
+
+
+
+
+#    mydb = Mydb()
