@@ -185,8 +185,9 @@ class LstmModelF():
                     self._history['accuracy'].append(accuracy_)
 
                 if verbose:
-                    print('g_epoch:', global_epochs,
-                          ' epoch:', epoch,
+                    print('g_epoch:', g,
+                          'i_stock:', i,
+                          #' epoch:', epoch,
                           ' loss:', loss_,
                           ' rmse:', accuracy_,
                           ' step:', self._sess.run(self._global_step)

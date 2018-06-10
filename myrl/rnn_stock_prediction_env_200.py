@@ -31,7 +31,7 @@ if __name__ == '__main__':
     #file_path = './data-02-stock_daily.csv'
     n_layers = 3
     cell_units = 256
-    global_epoch = 10
+    global_epoch = 5
     nb_epoch = 30
     #nb_epoch = 1
     batch_size = 1
