@@ -23,9 +23,9 @@ if __name__ == '__main__':
     # train Parameters
     seq_length = 10
     test_date_rate = 0.7
-    data_type = 'File'
+    data_type = 'DB_Data_Test'
     #train_file_path = './20100101_sample.txt'
-    train_file_path = './before_2018_200.csv'
+    train_file_path = './2018_030200.csv'
     test_file_path = './2018_030200.csv'
     #file_path = './20100101_sample.csv'
     #file_path = './data-02-stock_daily.csv'
@@ -42,15 +42,12 @@ if __name__ == '__main__':
 
     env = DailyTradingEnv(seq_length, test_date_rate, data_type, train_file_path, test_file_path)
 
-    model = LstmModelF("CLOSE", len(env.trainX[0][0][0]), 1, seq_length, n_layers, cell_units, p_keep)
+    model = LstmModelF("CLOSE", 5, 1, seq_length, n_layers, cell_units, p_keep)
 
-    model.fit(env.trainX, env.trainY, global_epoch, nb_epoch, p_learning_rate, 1)
+    #model.fit(env.trainX, env.trainY, global_epoch, nb_epoch, p_learning_rate, 1)
 
     accuracy = model.evaluate(env.testX, env.testY)
 
-    print('accuracy: ', accuracy)
-
-    '''
     # Plot predictions
     plt.plot(np.reshape(env.testY,[-1,1]))
     plt.plot(model.result_y)
@@ -59,7 +56,7 @@ if __name__ == '__main__':
     plt.show()
 
     #need to add multi stocks processing
-    
+    '''
     fig = plt.figure()
     ax_acc = fig.add_subplot(111) #axis accuracy
     ax_acc.plot(range(nb_epoch),model._history['accuracy'], label='rmse', color='black')
@@ -70,6 +67,12 @@ if __name__ == '__main__':
     plt.xlabel("epoch")
     plt.show()
     '''
+
+    print('accuracy: ', accuracy)
+
+    # Plot predictions
+    #plt.savefig('./plt/lstm.eps')
+
     # sequence length만큼의 가장 최근 데이터를 슬라이싱한다
     recent_data = env.get_recent_data()
     print("recent_data.shape:", recent_data.shape)

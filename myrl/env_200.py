@@ -26,7 +26,7 @@ class DailyTradingEnv():
         self.testX = []
         self.testY = []
 
-        #self.mydb = Mydb()
+        self.mydb = Mydb()
         self.reset()
 
 
@@ -184,11 +184,11 @@ class DailyTradingEnv():
                 LIMIT 1 \
                 ) b \
                 WHERE a.stock_code = b.stock_code \
-                AND a.date >= '20100101' \
+                AND a.date >= '20170101' \
                 ORDER BY a.date "
         #list to np.array
         results = self.mydb.select_sql_excute(sql)
-        results_as_list = [ [i[2],i[3],i[4],i[5],i[6]] for i in results]
+        results_as_list = [[i[0], i[2],i[3],i[4],i[5],i[6]] for i in results]
         #y = np.array(x, dtype=np.float16)
         array = np.asarray(results_as_list, dtype=np.float32)
         print(array)
@@ -199,6 +199,9 @@ class DailyTradingEnv():
         if self._data_type == 'File':
             train_xy, test_xy = self._get_state_file_data()
             self._build_data_set_200(train_xy, TRAIN_DATA)
+            self._build_data_set_200(test_xy, TEST_DATA)
+        elif self._data_type == 'DB_Data_Test':
+            test_xy = self._get_state_data()
             self._build_data_set_200(test_xy, TEST_DATA)
         else:
             self._build_data_set(self._get_state_data())
