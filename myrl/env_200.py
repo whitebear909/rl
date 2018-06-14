@@ -7,6 +7,32 @@ from io import BytesIO
 import pymysql
 from collections import deque
 import os
+import time
+import datetime
+
+
+# Settings for Project
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+# Settings for Templates
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+
+
+# Settings for Static
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+STATIC_URL = "/static/"
+
+
+# Settings for Data
+DATA_DIR = os.path.join(BASE_DIR, "database")
+
+
+# Date Time Format
+timestr = None
+FORMAT_DATE = "%Y%m%d"
+FORMAT_DATETIME = "%Y%m%d%H%M%S"
+
 
 TRAIN_DATA = 0
 TEST_DATA = 1
@@ -50,6 +76,15 @@ class DailyTradingEnv():
         org_x_np = np.asarray(org_x)
         x_np = np.asarray(x)
         return (x_np * (org_x_np.max() - org_x_np.min() + 1e-7)) + org_x_np.min()
+
+    def preprocess(chart_data):
+        prep_data = chart_data
+        windows = [5, 10, 20, 60, 120]
+        for window in windows:
+            prep_data['close_ma{}'.format(window)] = prep_data['close'].rolling(window).mean()
+            prep_data['volume_ma{}'.format(window)] = (
+                prep_data['volume'].rolling(window).mean())
+        return prep_data
 
     def _build_data_set_200(self, xy, data_type):
         # stock, date, Open, High, Low, Volume, Close
@@ -211,6 +246,61 @@ class DailyTradingEnv():
             self._build_data_set(train_xy)
 
 
+def get_time_str():
+    global timestr
+    timestr = datetime.datetime.fromtimestamp(
+        int(time.time())).strftime(FORMAT_DATETIME)
+    return timestr
+
+def load_chart_data(fpath):
+    chart_data = pd.read_csv(fpath, thousands=',', header=None)
+    chart_data.columns = ['Stock_Code','date', 'open', 'high', 'low', 'close', 'volume']
+    return chart_data
+
+def preprocess(chart_data):
+    prep_data = chart_data
+    windows = [5, 10, 20, 60, 120]
+    for window in windows:
+        prep_data['close_ma{}'.format(window)] = prep_data['close'].rolling(window).mean()
+        prep_data['volume_ma{}'.format(window)] = (
+            prep_data['volume'].rolling(window).mean())
+    return prep_data
+
+def build_training_data(prep_data):
+    training_data = prep_data
+
+    training_data['open_lastclose_ratio'] = np.zeros(len(training_data))
+    training_data.loc[1:, 'open_lastclose_ratio'] = \
+        (training_data['open'][1:].values - training_data['close'][:-1].values) / \
+        training_data['close'][:-1].values
+    training_data['high_close_ratio'] = \
+        (training_data['high'].values - training_data['close'].values) / \
+        training_data['close'].values
+    training_data['low_close_ratio'] = \
+        (training_data['low'].values - training_data['close'].values) / \
+        training_data['close'].values
+    training_data['close_lastclose_ratio'] = np.zeros(len(training_data))
+    training_data.loc[1:, 'close_lastclose_ratio'] = \
+        (training_data['close'][1:].values - training_data['close'][:-1].values) / \
+        training_data['close'][:-1].values
+    training_data['volume_lastvolume_ratio'] = np.zeros(len(training_data))
+    training_data.loc[1:, 'volume_lastvolume_ratio'] = \
+        (training_data['volume'][1:].values - training_data['volume'][:-1].values) / \
+        training_data['volume'][:-1]\
+            .replace(to_replace=0, method='ffill') \
+            .replace(to_replace=0, method='bfill').values
+
+    windows = [5, 10, 20, 60, 120]
+    for window in windows:
+        training_data['close_ma%d_ratio' % window] = \
+            (training_data['close'] - training_data['close_ma%d' % window]) / \
+            training_data['close_ma%d' % window]
+        training_data['volume_ma%d_ratio' % window] = \
+            (training_data['volume'] - training_data['volume_ma%d' % window]) / \
+            training_data['volume_ma%d' % window]
+
+    return training_data
+
 class Mydb():
 
     def __init__(self):
@@ -283,11 +373,13 @@ if __name__ == "__main__":
     p_learning_rate = 0.0001
     n_training_stock = 200
     predict_days = 5
+    stock_code = '000070'
 
-    env = DailyTradingEnv(seq_length, test_date_rate, data_type, train_file_path, test_file_path)
+    #env = DailyTradingEnv(seq_length, test_date_rate, data_type, train_file_path, test_file_path)
     # 로그 기록
-    log_dir = os.path.join(settings.BASE_DIR, 'logs/%s' % stock_code)
-    timestr = settings.get_time_str()
+    log_dir = os.path.join(BASE_DIR, 'logs/%s' % stock_code)
+    timestr = get_time_str()
+
     if not os.path.exists('logs/%s' % stock_code):
         os.makedirs('logs/%s' % stock_code)
     file_handler = logging.FileHandler(filename=os.path.join(
@@ -299,11 +391,11 @@ if __name__ == "__main__":
                         handlers=[file_handler, stream_handler], level=logging.DEBUG)
 
     # 주식 데이터 준비
-    chart_data = data_manager.load_chart_data(
-        os.path.join(settings.BASE_DIR,
-                     'data/chart_data/{}.csv'.format(stock_code)))
-    prep_data = data_manager.preprocess(chart_data)
-    training_data = data_manager.build_training_data(prep_data)
+    chart_data = load_chart_data(
+        os.path.join(BASE_DIR,
+                     '{}.csv'.format('20100101')))
+    prep_data = preprocess(chart_data)
+    training_data = build_training_data(prep_data)
 
     # 기간 필터링
     training_data = training_data[(training_data['date'] >= '2017-01-01') &

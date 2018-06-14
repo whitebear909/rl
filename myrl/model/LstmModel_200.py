@@ -202,6 +202,6 @@ class LstmModelF():
 
 
 # ckpt = tf.train.get_checkpoint_state(self.name)
-# self.saver.restore(self.sess, ckpt.model_checkpoint_path)
+# self.saver.restore(self.sess, ckpt.model_checkpoint_path)git
 # new_saver = tf.train.import_meta_graph("./lstm.ckpt.meta")
 # self.saver.restore(self.sess, "./lstm.ckpt")
